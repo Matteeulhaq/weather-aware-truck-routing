@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { usePlan } from './hooks/usePlan'
 import PlanForm from './components/PlanForm'
+import RouteMap from './components/RouteMap'
 
 function Header() {
   return (
@@ -15,6 +16,7 @@ function Header() {
 
 export default function App() {
   const [plan, setPlan] = useState(null)
+  const [selectedRouteId, setSelectedRouteId] = useState(null)
   const { mutate, isPending, error } = usePlan(setPlan)
 
   return (
@@ -34,10 +36,7 @@ export default function App() {
       </aside>
 
       <main className="relative h-1/2 flex-1 lg:h-full">
-        {/* RouteMap (T3.4) mounts here. */}
-        <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-500">
-          Map loads here.
-        </div>
+        <RouteMap plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
         {/* HeatTimeline (T4.2) floats bottom-center; Legend (T3.5) bottom-left. */}
       </main>
     </div>
