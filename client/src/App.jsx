@@ -7,6 +7,7 @@ import RouteCards from './components/RouteCards'
 import CheckpointTable from './components/CheckpointTable'
 import HeatTimeline from './components/HeatTimeline'
 import ErrorBanner from './components/ErrorBanner'
+import ErrorBoundary from './components/ErrorBoundary'
 import SkeletonCards from './components/SkeletonCards'
 
 function Header() {
@@ -69,14 +70,16 @@ export default function App() {
       </aside>
 
       <main className="relative h-1/2 flex-1 lg:h-full">
-        <RouteMap
-          plan={plan}
-          selectedRouteId={selectedRouteId}
-          onSelectRoute={setSelectedRouteId}
-          focusTarget={focusTarget}
-          sliderHour={sliderHour}
-          timelineMode={timelineMode}
-        />
+        <ErrorBoundary>
+          <RouteMap
+            plan={plan}
+            selectedRouteId={selectedRouteId}
+            onSelectRoute={setSelectedRouteId}
+            focusTarget={focusTarget}
+            sliderHour={sliderHour}
+            timelineMode={timelineMode}
+          />
+        </ErrorBoundary>
         <Legend />
         <HeatTimeline
           plan={plan}
