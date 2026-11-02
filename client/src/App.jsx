@@ -5,6 +5,7 @@ import RouteMap from './components/RouteMap'
 import Legend from './components/Legend'
 import RouteCards from './components/RouteCards'
 import CheckpointTable from './components/CheckpointTable'
+import HeatTimeline from './components/HeatTimeline'
 
 function Header() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
   const [plan, setPlan] = useState(null)
   const [selectedRouteId, setSelectedRouteId] = useState(null)
   const [focusTarget, setFocusTarget] = useState(null)
+  const [sliderHour, setSliderHour] = useState(0)
+  const [timelineMode, setTimelineMode] = useState(false)
   const { mutate, isPending, error } = usePlan((data) => {
     setPlan(data)
     setSelectedRouteId(data.recommended_route_id)
@@ -47,11 +50,17 @@ export default function App() {
           selectedRouteId={selectedRouteId}
           onSelectRoute={setSelectedRouteId}
           focusTarget={focusTarget}
-          sliderHour={0}
-          timelineMode={false}
+          sliderHour={sliderHour}
+          timelineMode={timelineMode}
         />
         <Legend />
-        {/* HeatTimeline (T4.2) floats bottom-center. */}
+        <HeatTimeline
+          plan={plan}
+          hour={sliderHour}
+          setHour={setSliderHour}
+          timelineMode={timelineMode}
+          setTimelineMode={setTimelineMode}
+        />
       </main>
     </div>
   )
