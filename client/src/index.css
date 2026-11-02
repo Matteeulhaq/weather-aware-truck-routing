@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+
+/* Leaflet css is imported in main.jsx so it ships with the JS chunk. */
+
+@theme {
+  --color-risk-low: #22c55e;
+  --color-risk-moderate: #eab308;
+  --color-risk-high: #f97316;
+  --color-risk-severe: #ef4444;
+  --color-risk-notravel: #7f1d1d;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply antialiased bg-slate-950 text-slate-100;
+}
+
+/* Slim dark scrollbars for the side panel. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: theme(--color-slate-600) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: theme(--color-slate-600);
+  border-radius: 8px;
+}
+
+/* Leaflet attribution legibility on the dark theme. */
+.leaflet-control-attribution {
+  background: rgba(2, 6, 23, 0.7) !important;
+  color: #94a3b8 !important;
+}
+.leaflet-control-attribution a {
+  color: #cbd5e1 !important;
+}
+
+/* Risk popups. */
+.risk-popup .leaflet-popup-content-wrapper {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+}
+.risk-popup .leaflet-popup-tip {
+  background: #0f172a;
+}
