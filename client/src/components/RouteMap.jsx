@@ -75,12 +75,14 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
     const map = L.map(containerRef.current, { preferCanvas: true, zoomControl: false })
     L.control.zoom({ position: 'bottomright' }).addTo(map)
     // CARTO dark basemap — requires an API key (VITE_CARTO_API_KEY, free at
-    // carto.com/basemaps). Without one, fall back to keyless OSM raster tiles
-    // so a fresh clone still renders a map (light-themed).
+    // carto.com/basemaps/apikey). Keyed raster URLs use the /rastertiles/
+    // path with ?key= (NOT ?api_key= — an unknown param silently returns the
+    // "API KEY REQUIRED" placeholder). Without a key, fall back to keyless
+    // OSM raster tiles so a fresh clone still renders a map (light-themed).
     const cartoKey = import.meta.env.VITE_CARTO_API_KEY
     const basemap = cartoKey
       ? {
-          url: `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${cartoKey}`,
+          url: `https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`,
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
         }
