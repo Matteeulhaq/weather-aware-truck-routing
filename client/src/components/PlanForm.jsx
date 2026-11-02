@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { defaultDeparture, nowLocal } from '../lib/format'
 
 const INTERVALS = [10, 25, 50]
 const MAX_WEIGHT = 80_000
@@ -10,32 +11,14 @@ const LOADING_STAGES = [
   'Scoring risk & recommending…',
 ]
 
-/** Tomorrow 08:00 local, formatted for <input type="datetime-local">. */
-export function defaultDeparture() {
-  const date = new Date()
-  date.setDate(date.getDate() + 1)
-  date.setHours(8, 0, 0, 0)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function nowLocal() {
-  const date = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
 function useLoadingStage(pending) {
   const [stage, setStage] = useState(0)
   useEffect(() => {
-    if (!pending) {
-      setStage(0)
-      return undefined
-    }
+    if (!pending) return undefined
     const timer = setInterval(() => setStage((s) => (s + 1) % LOADING_STAGES.length), 1400)
     return () => clearInterval(timer)
   }, [pending])
-  return LOADING_STAGES[stage]
+  return pending ? LOADING_STAGES[stage % LOADING_STAGES.length] : null
 }
 
 export default function PlanForm({ onSubmit, pending, error }) {
