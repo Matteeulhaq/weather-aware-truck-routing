@@ -3,6 +3,7 @@ import { usePlan } from './hooks/usePlan'
 import PlanForm from './components/PlanForm'
 import RouteMap from './components/RouteMap'
 import Legend from './components/Legend'
+import RouteCards from './components/RouteCards'
 
 function Header() {
   return (
@@ -30,13 +31,8 @@ export default function App() {
         <Header />
         <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
           <PlanForm onSubmit={mutate} pending={isPending} error={error} />
-          {plan && (
-            <p className="text-xs text-slate-400">
-              {plan.routes.length} route{plan.routes.length === 1 ? '' : 's'} analyzed — recommended{' '}
-              <span className="font-medium text-sky-400">{plan.recommended_route_id}</span>
-            </p>
-          )}
-          {/* RouteCards (T3.6) and CheckpointTable (T3.7) mount below the form. */}
+          <RouteCards plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
+          {/* CheckpointTable (T3.7) mounts below the cards. */}
         </div>
       </aside>
 
