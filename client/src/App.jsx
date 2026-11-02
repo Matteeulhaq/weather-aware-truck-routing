@@ -4,6 +4,7 @@ import PlanForm from './components/PlanForm'
 import RouteMap from './components/RouteMap'
 import Legend from './components/Legend'
 import RouteCards from './components/RouteCards'
+import CheckpointTable from './components/CheckpointTable'
 
 function Header() {
   return (
@@ -32,7 +33,11 @@ export default function App() {
         <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
           <PlanForm onSubmit={mutate} pending={isPending} error={error} />
           <RouteCards plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
-          {/* CheckpointTable (T3.7) mounts below the cards. */}
+          <CheckpointTable
+            plan={plan}
+            selectedRouteId={selectedRouteId}
+            onFocusCheckpoint={setFocusTarget}
+          />
         </div>
       </aside>
 
