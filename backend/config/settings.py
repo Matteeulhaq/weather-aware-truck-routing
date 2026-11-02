@@ -42,7 +42,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise first in line after security: serves the built SPA
+    # (hashed + pre-compressed assets) from the same process.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # GZip compresses the (large) JSON plan responses.
+    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -86,9 +91,23 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
+# Static files: the built React app (client/dist) is served by Django.
+# The Vite build sets base='/static/' so asset URLs match STATIC_URL.
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 STATIC_URL = "static/"
+
+STATICFILES_DIRS = [BASE_DIR.parent / "client" / "dist"]
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # DRF — JSON-only, public API. No auth: the app has no user accounts, which
