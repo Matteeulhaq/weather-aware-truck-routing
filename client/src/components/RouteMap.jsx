@@ -97,7 +97,8 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
     if (!map || !plan) return
 
     if (routesGroupRef.current) routesGroupRef.current.remove()
-    routesGroupRef.current = L.layerGroup().addTo(map)
+    // featureGroup (not layerGroup): it exposes getBounds() for the fitBounds below.
+    routesGroupRef.current = L.featureGroup().addTo(map)
     polylineRefs.current = new Map()
 
     for (const route of plan.routes) {
@@ -116,7 +117,7 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
 
     // Checkpoint markers, colored by risk at the truck's ETA.
     if (checkpointsGroupRef.current) checkpointsGroupRef.current.remove()
-    checkpointsGroupRef.current = L.layerGroup().addTo(map)
+    checkpointsGroupRef.current = L.featureGroup().addTo(map)
     markerRefs.current = new Map()
 
     for (const route of plan.routes) {
