@@ -57,15 +57,14 @@ def test_single_location_object_is_wrapped(monkeypatch):
     assert len(results) == 1
 
 
-def test_series_truncated_to_49_hours(monkeypatch):
+def test_full_grid_returned_untruncated(monkeypatch):
     monkeypatch.setattr(om.requests, "get", lambda *a, **k: FakeResponse(200, _hourly_entry(hours=72)))
 
     results = om.get_hourly_forecasts([(35.0, -100.0)])
 
     series = results[0]
     for key in ("hours", "wind_mph", "rain_in_hr", "snow_in_hr"):
-        assert len(series[key]) == om.HOURS_NEEDED
-    assert series["hours"][-1] == 1_760_000_000 + 48 * 3600  # hour 48 inclusive
+        assert len(series[key]) == 72  # planner slices the departure-relative window
 
 
 def test_batches_150_points_into_two_requests(monkeypatch):

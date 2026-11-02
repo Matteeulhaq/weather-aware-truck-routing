@@ -9,9 +9,17 @@ Geometry/parsing notes:
 - `instructions` stays enabled and `geometry_simplify` false so that
   `way_points` indices align with the polyline (checkpoint interpolation
   depends on it).
+
+Long-route alternatives: the public ORS API only allows the
+`alternative_routes` algorithm for routes up to ~100 km (error code 2004).
+For longer trips we synthesize corridor alternatives instead: the direct
+route plus one route via a north-offset via-point and one via a
+south-offset via-point. Each is a genuine HGV-profile route from the same
+routing engine; duplicates (nearly identical distance) are dropped.
 """
 
 import logging
+import math
 
 import requests
 from django.conf import settings
@@ -24,6 +32,14 @@ TIMEOUT_S = 10
 
 DEFAULT_PROFILE = "driving-hgv"  # heavy-goods routing; trucks, not cars
 MAX_ALTERNATIVES = 3
+
+# ORS "Request parameters exceed the server configuration limits" for the
+# alternatives algorithm (distance cap on the public API).
+_ALTERNATIVES_LIMIT_CODE = 2004
+
+_M_PER_DEG_LAT = 11_0540.0  # ~110,540 m per degree of latitude
+_M_PER_DEG_LNG = 111_320.0  # at the equator; scaled by cos(latitude)
+_VIA_OFFSET_FRACTION = 0.12  # detour via-point offset as a share of route length
 
 
 class UpstreamError(Exception):
@@ -38,21 +54,32 @@ def _headers() -> dict:
     return {"Authorization": settings.ORS_API_KEY, "Content-Type": "application/json"}
 
 
-def get_directions(origin_lnglat, destination_lnglat, profile: str = DEFAULT_PROFILE) -> list:
-    """Fetch up to 3 alternative routes; returns the GeoJSON feature list."""
+def _directions_body(coordinates, alternatives: bool) -> dict:
     body = {
-        "coordinates": [list(origin_lnglat), list(destination_lnglat)],
-        "alternative_routes": {
-            "target_count": MAX_ALTERNATIVES,
-            "share_factor": 0.6,
-            "weight_factor": 1.6,
-        },
+        "coordinates": [list(c) for c in coordinates],
         "instructions": True,
         "geometry_simplify": False,
         "elevation": False,
+        # Unlimited snap radius: geocoded city centroids and synthetic via
+        # points may sit far from any HGV-routable road; ORS otherwise
+        # rejects them when nothing routable is within 350 m.
+        "radiuses": [-1] * len(coordinates),
     }
-    url = DIRECTIONS_URL.format(profile=profile)
+    if alternatives:
+        body["alternative_routes"] = {
+            "target_count": MAX_ALTERNATIVES,
+            "share_factor": 0.6,
+            "weight_factor": 1.6,
+        }
+    return body
 
+
+def _post(body: dict, url: str) -> list | None:
+    """POST to ORS; returns features or None when ORS rejected the request.
+
+    Network failures and 429s raise; other >=400 responses return None with
+    the payload logged so the caller can decide on a fallback.
+    """
     try:
         response = requests.post(url, json=body, headers=_headers(), timeout=TIMEOUT_S)
     except requests.RequestException as exc:
@@ -62,19 +89,102 @@ def get_directions(origin_lnglat, destination_lnglat, profile: str = DEFAULT_PRO
     if response.status_code == 429:
         logger.warning("ORS directions rate-limited (429).")
         raise RateLimitError("Routing service rate limit hit — try again shortly.")
-    if response.status_code >= 400:
-        logger.warning("ORS directions HTTP %s: %s", response.status_code, response.text[:300])
-        raise UpstreamError("Routing service rejected the request.")
 
     try:
-        features = response.json()["features"]
-    except (ValueError, KeyError) as exc:
-        logger.warning("ORS directions returned malformed body.")
-        raise UpstreamError("Routing service returned an unusable response.") from exc
+        payload = response.json()
+    except ValueError:
+        payload = None
 
+    if response.status_code >= 400:
+        logger.warning("ORS directions HTTP %s: %s", response.status_code, response.text[:300])
+        return None
+
+    features = (payload or {}).get("features")
+    if not features:
+        return None
+    return features
+
+
+def _is_alternatives_limit_rejection(payload) -> bool:
+    error = (payload or {}).get("error") if isinstance(payload, dict) else None
+    return bool(error) and error.get("code") == _ALTERNATIVES_LIMIT_CODE
+
+
+def _via_points(origin_lnglat, destination_lnglat) -> list:
+    """Two detour via-points, offset perpendicular to the straight line."""
+    lng1, lat1 = origin_lnglat
+    lng2, lat2 = destination_lnglat
+    mid_lat = math.radians((lat1 + lat2) / 2)
+
+    dx = (lng2 - lng1) * _M_PER_DEG_LNG * math.cos(mid_lat)
+    dy = (lat2 - lat1) * _M_PER_DEG_LAT
+    length = math.hypot(dx, dy)
+    if length == 0:
+        return []
+
+    offset_m = length * _VIA_OFFSET_FRACTION
+    d_lat = offset_m / _M_PER_DEG_LAT
+    d_lng = offset_m / (_M_PER_DEG_LNG * math.cos(mid_lat))
+
+    # Unit perpendicular to the line, then ± offset around mid-route points.
+    px, py = -dy / length, dx / length
+    sign_lng = 1 if px >= 0 else -1
+    sign_lat = 1 if py >= 0 else -1
+
+    via1 = [
+        lng1 + (lng2 - lng1) * 0.45 + sign_lng * d_lng,
+        lat1 + (lat2 - lat1) * 0.45 + sign_lat * d_lat,
+    ]
+    via2 = [
+        lng1 + (lng2 - lng1) * 0.55 - sign_lng * d_lng,
+        lat1 + (lat2 - lat1) * 0.55 - sign_lat * d_lat,
+    ]
+    return [via1, via2]
+
+
+def _dedupe_routes(features: list) -> list:
+    """Drop routes whose distance is within 1% of an already-kept route."""
+    kept = []
+    distances = []
+    for feature in features:
+        distance = feature.get("properties", {}).get("summary", {}).get("distance", 0)
+        if any(abs(distance - d) / max(d, 1) < 0.01 for d in distances):
+            continue
+        kept.append(feature)
+        distances.append(distance)
+    return kept
+
+
+def get_directions(origin_lnglat, destination_lnglat, profile: str = DEFAULT_PROFILE) -> list:
+    """Up to 3 routes between two points, as a list of GeoJSON features.
+
+    Strategy: ORS native alternatives when the pair qualifies (<= ~100 km);
+    otherwise direct route + two via-point corridor routes.
+    """
+    url = DIRECTIONS_URL.format(profile=profile)
+    features = _post(_directions_body([origin_lnglat, destination_lnglat], True), url)
+    if features:
+        return features[:MAX_ALTERNATIVES]
+
+    # Retry once without alternatives to distinguish "too long for the
+    # alternatives algorithm" from a genuinely unroutable pair.
+    features = _post(_directions_body([origin_lnglat, destination_lnglat], False), url)
     if not features:
         raise UpstreamError("No route found between the given points.")
-    return features
+
+    logger.info("Pair too long for ORS alternatives; building via-point corridor routes.")
+    routes = list(features)
+    for via in _via_points(origin_lnglat, destination_lnglat):
+        via_features = _post(
+            _directions_body([origin_lnglat, via, destination_lnglat], False), url
+        )
+        if via_features:
+            routes.extend(via_features)
+
+    routes = _dedupe_routes(routes)[:MAX_ALTERNATIVES]
+    if not routes:
+        raise UpstreamError("No route found between the given points.")
+    return routes
 
 
 def geocode(text: str, size: int = 5) -> list:

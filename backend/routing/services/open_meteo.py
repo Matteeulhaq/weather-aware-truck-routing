@@ -10,9 +10,10 @@ Units are requested natively — `wind_speed_unit=mph` and
 unit conversion happens anywhere in this codebase.
 
 `timeformat=unixtime` returns the hourly grid as UTC epoch seconds, which
-makes ETA matching pure integer math. Although 72 h are fetched (ETA risk
-lookups for long trips), client-facing series are truncated to 49 entries —
-the 0–48 h slider window. Null entries are kept as None (model gaps).
+makes ETA matching pure integer math. The full ~72 h grid is returned —
+ETA risk lookups need hours well past the 0–48 h slider window; the planner
+slices the client-facing 49 h departure-relative window itself. Null entries
+are kept as None (model gaps).
 """
 
 import logging
@@ -24,7 +25,6 @@ logger = logging.getLogger("routing")
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_S = 10
 BATCH_SIZE = 100  # coordinate pairs per request
-HOURS_NEEDED = 49  # slider window: hours 0..48 inclusive
 
 
 class UpstreamError(Exception):
@@ -44,17 +44,13 @@ def _build_params(latitudes, longitudes) -> dict:
 
 
 def _normalize_series(entry: dict) -> dict:
-    """One location's response -> {hours, wind_mph, rain_in_hr, snow_in_hr} (truncated)."""
+    """One location's response -> {hours, wind_mph, rain_in_hr, snow_in_hr} (full grid)."""
     hourly = entry["hourly"]
-
-    def _series(key):
-        return hourly[key][:HOURS_NEEDED]
-
     return {
-        "hours": _series("time"),
-        "wind_mph": _series("wind_speed_10m"),
-        "rain_in_hr": _series("rain"),
-        "snow_in_hr": _series("snowfall"),
+        "hours": list(hourly["time"]),
+        "wind_mph": list(hourly["wind_speed_10m"]),
+        "rain_in_hr": list(hourly["rain"]),
+        "snow_in_hr": list(hourly["snowfall"]),
     }
 
 
