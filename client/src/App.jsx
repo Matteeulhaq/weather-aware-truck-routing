@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { usePlan } from './hooks/usePlan'
 import PlanForm from './components/PlanForm'
 import RouteMap from './components/RouteMap'
+import Legend from './components/Legend'
 
 function Header() {
   return (
@@ -17,7 +18,11 @@ function Header() {
 export default function App() {
   const [plan, setPlan] = useState(null)
   const [selectedRouteId, setSelectedRouteId] = useState(null)
-  const { mutate, isPending, error } = usePlan(setPlan)
+  const [focusTarget, setFocusTarget] = useState(null)
+  const { mutate, isPending, error } = usePlan((data) => {
+    setPlan(data)
+    setSelectedRouteId(data.recommended_route_id)
+  })
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
@@ -36,8 +41,14 @@ export default function App() {
       </aside>
 
       <main className="relative h-1/2 flex-1 lg:h-full">
-        <RouteMap plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
-        {/* HeatTimeline (T4.2) floats bottom-center; Legend (T3.5) bottom-left. */}
+        <RouteMap
+          plan={plan}
+          selectedRouteId={selectedRouteId}
+          onSelectRoute={setSelectedRouteId}
+          focusTarget={focusTarget}
+        />
+        <Legend />
+        {/* HeatTimeline (T4.2) floats bottom-center. */}
       </main>
     </div>
   )
