@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { defaultDeparture, nowLocal } from '../lib/format'
+import GeocodeInput from './GeocodeInput'
 
 const INTERVALS = [10, 25, 50]
 const MAX_WEIGHT = 80_000
@@ -22,8 +23,8 @@ function useLoadingStage(pending) {
 }
 
 export default function PlanForm({ onSubmit, pending, error }) {
-  const [origin, setOrigin] = useState('')
-  const [destination, setDestination] = useState('')
+  const [origin, setOrigin] = useState({ name: '', lat: null, lng: null })
+  const [destination, setDestination] = useState({ name: '', lat: null, lng: null })
   const [departure, setDeparture] = useState(defaultDeparture)
   const [weight, setWeight] = useState('35000')
   const [intervalMiles, setIntervalMiles] = useState(25)
@@ -32,7 +33,7 @@ export default function PlanForm({ onSubmit, pending, error }) {
 
   function handleSubmit(event) {
     event.preventDefault()
-    if (!origin.trim() || !destination.trim()) {
+    if (!origin.name.trim() || !destination.name.trim()) {
       setValidationError('Origin and destination are both required.')
       return
     }
@@ -48,8 +49,8 @@ export default function PlanForm({ onSubmit, pending, error }) {
     }
     setValidationError(null)
     onSubmit({
-      origin: origin.trim(),
-      destination: destination.trim(),
+      origin: origin.lat !== null ? origin : origin.name.trim(),
+      destination: destination.lat !== null ? destination : destination.name.trim(),
       departure_time: departureDate.toISOString(),
       load_weight_lbs: Math.round(weightNum),
       sample_interval_miles: intervalMiles,
@@ -58,35 +59,21 @@ export default function PlanForm({ onSubmit, pending, error }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="origin" className="mb-1 block text-xs font-medium text-slate-300">
-          Origin
-        </label>
-        <input
-          id="origin"
-          type="text"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
-          placeholder="City or address"
-          autoComplete="off"
-          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
-        />
-      </div>
+      <GeocodeInput
+        id="origin"
+        label="Origin"
+        placeholder="City or address"
+        value={origin.name}
+        onChange={setOrigin}
+      />
 
-      <div>
-        <label htmlFor="destination" className="mb-1 block text-xs font-medium text-slate-300">
-          Destination
-        </label>
-        <input
-          id="destination"
-          type="text"
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          placeholder="City or address"
-          autoComplete="off"
-          className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
-        />
-      </div>
+      <GeocodeInput
+        id="destination"
+        label="Destination"
+        placeholder="City or address"
+        value={destination.name}
+        onChange={setDestination}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <div>
