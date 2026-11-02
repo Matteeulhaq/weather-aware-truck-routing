@@ -6,6 +6,8 @@ import Legend from './components/Legend'
 import RouteCards from './components/RouteCards'
 import CheckpointTable from './components/CheckpointTable'
 import HeatTimeline from './components/HeatTimeline'
+import ErrorBanner from './components/ErrorBanner'
+import SkeletonCards from './components/SkeletonCards'
 
 function Header() {
   return (
@@ -35,12 +37,34 @@ export default function App() {
         <Header />
         <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
           <PlanForm onSubmit={mutate} pending={isPending} error={error} />
-          <RouteCards plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
-          <CheckpointTable
-            plan={plan}
-            selectedRouteId={selectedRouteId}
-            onFocusCheckpoint={setFocusTarget}
-          />
+
+          {isPending && <SkeletonCards />}
+
+          {!isPending && plan?.warnings?.length > 0 && (
+            <ErrorBanner tone="warning" title="Forecast gaps" items={plan.warnings} />
+          )}
+
+          {!isPending && plan && (
+            <>
+              <RouteCards plan={plan} selectedRouteId={selectedRouteId} onSelectRoute={setSelectedRouteId} />
+              <CheckpointTable
+                plan={plan}
+                selectedRouteId={selectedRouteId}
+                onFocusCheckpoint={setFocusTarget}
+              />
+            </>
+          )}
+
+          {!isPending && !plan && (
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs leading-relaxed text-slate-400">
+              <p className="mb-2 text-sm font-semibold text-slate-200">Plan a trip</p>
+              <p>
+                Enter an origin, destination, departure time, and load weight. The app fetches 3
+                route options, forecasts the weather at each checkpoint's arrival time, applies
+                wind/rain/snow and load-weight risk rules, and recommends the safest route.
+              </p>
+            </div>
+          )}
         </div>
       </aside>
 
