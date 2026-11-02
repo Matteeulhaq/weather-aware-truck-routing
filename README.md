@@ -5,7 +5,7 @@ Helps a truck driver choose the **safest** route based on **weather**, **load we
 OpenRouteService routing, Open-Meteo hourly forecasts, and a 0–48 h weather-risk heatmap
 along the trip corridor.
 
-**Live demo:** _deploying on Render — URL pending_
+**Live demo:** URL: https://weather-aware-truck-routing-0i0q.onrender.com
 **Walkthrough video:** _Loom link pending_
 
 ## Features
