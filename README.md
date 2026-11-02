@@ -1,11 +1,11 @@
 # Weather-Aware Truck Routing
 
 Helps a truck driver choose the **safest** route based on **weather**, **load weight**, and
-**travel time**. Built for the Spotter Full Stack Developer assessment: **React + Django**,
+**travel time**. Framework used: **React + Django**,
 OpenRouteService routing, Open-Meteo hourly forecasts, and a 0–48 h weather-risk heatmap
 along the trip corridor.
 
-**Live demo:** URL: https://weather-aware-truck-routing-0i0q.onrender.com
+**Deployed link:** https://weather-aware-truck-routing-0i0q.onrender.com
 **Walkthrough video:** _Loom link pending_
 
 ## Features
