@@ -18,11 +18,15 @@ south-offset via-point. Each is a genuine HGV-profile route from the same
 routing engine; duplicates (nearly identical distance) are dropped.
 """
 
+import hashlib
+import json
 import logging
 import math
+import time
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger("routing")
 
@@ -32,6 +36,11 @@ TIMEOUT_S = 10
 
 DEFAULT_PROFILE = "driving-hgv"  # heavy-goods routing; trucks, not cars
 MAX_ALTERNATIVES = 3
+
+TRANSIENT_STATUS = (500, 502, 503, 504)
+RETRY_BACKOFF_S = 1
+DIRECTIONS_CACHE_TTL = 60 * 60  # also stabilizes ORS alternative randomness
+GEOCODE_CACHE_TTL = 24 * 60 * 60
 
 # ORS "Request parameters exceed the server configuration limits" for the
 # alternatives algorithm (distance cap on the public API).
@@ -77,18 +86,26 @@ def _directions_body(coordinates, alternatives: bool) -> dict:
 def _post(body: dict, url: str) -> list | None:
     """POST to ORS; returns features or None when ORS rejected the request.
 
-    Network failures and 429s raise; other >=400 responses return None with
-    the payload logged so the caller can decide on a fallback.
+    One retry with backoff on transient 5xx / network errors. 429s raise;
+    other >=400 responses return None so the caller can decide on a fallback.
     """
-    try:
-        response = requests.post(url, json=body, headers=_headers(), timeout=TIMEOUT_S)
-    except requests.RequestException as exc:
-        logger.warning("ORS directions request failed: %s", exc)
-        raise UpstreamError("Routing service is unreachable.") from exc
+    for attempt in (0, 1):
+        try:
+            response = requests.post(url, json=body, headers=_headers(), timeout=TIMEOUT_S)
+        except requests.RequestException as exc:
+            if attempt == 0:
+                time.sleep(RETRY_BACKOFF_S)
+                continue
+            logger.warning("ORS directions request failed: %s", exc)
+            raise UpstreamError("Routing service is unreachable.") from exc
 
-    if response.status_code == 429:
-        logger.warning("ORS directions rate-limited (429).")
-        raise RateLimitError("Routing service rate limit hit — try again shortly.")
+        if response.status_code == 429:
+            logger.warning("ORS directions rate-limited (429).")
+            raise RateLimitError("Routing service rate limit hit — try again shortly.")
+        if response.status_code in TRANSIENT_STATUS and attempt == 0:
+            time.sleep(RETRY_BACKOFF_S)
+            continue
+        break
 
     try:
         payload = response.json()
@@ -155,16 +172,32 @@ def _dedupe_routes(features: list) -> list:
     return kept
 
 
+def _cache_key(prefix: str, value) -> str:
+    digest = hashlib.sha1(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()
+    return f"{prefix}:{digest}"
+
+
 def get_directions(origin_lnglat, destination_lnglat, profile: str = DEFAULT_PROFILE) -> list:
     """Up to 3 routes between two points, as a list of GeoJSON features.
+
+    Cached for 1 h per (origin, destination, profile) — cheaper on ORS's
+    40 req/min free quota and stabilizes alternative randomness between
+    reloads.
 
     Strategy: ORS native alternatives when the pair qualifies (<= ~100 km);
     otherwise direct route + two via-point corridor routes.
     """
+    key = _cache_key("directions", [origin_lnglat, destination_lnglat, profile])
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
     url = DIRECTIONS_URL.format(profile=profile)
     features = _post(_directions_body([origin_lnglat, destination_lnglat], True), url)
     if features:
-        return features[:MAX_ALTERNATIVES]
+        routes = features[:MAX_ALTERNATIVES]
+        cache.set(key, routes, DIRECTIONS_CACHE_TTL)
+        return routes
 
     # Retry once without alternatives to distinguish "too long for the
     # alternatives algorithm" from a genuinely unroutable pair.
@@ -184,11 +217,17 @@ def get_directions(origin_lnglat, destination_lnglat, profile: str = DEFAULT_PRO
     routes = _dedupe_routes(routes)[:MAX_ALTERNATIVES]
     if not routes:
         raise UpstreamError("No route found between the given points.")
+    cache.set(key, routes, DIRECTIONS_CACHE_TTL)
     return routes
 
 
 def geocode(text: str, size: int = 5) -> list:
-    """Forward geocoding; returns [{name, lat, lng}, ...] best-first."""
+    """Forward geocoding; returns [{name, lat, lng}, ...] best-first (cached 24 h)."""
+    key = _cache_key("geocode", [text, size])
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
     try:
         response = requests.get(
             GEOCODE_URL,
@@ -220,4 +259,6 @@ def geocode(text: str, size: int = 5) -> list:
         if coords[0] is None or coords[1] is None or not label:
             continue
         results.append({"name": label, "lng": coords[0], "lat": coords[1]})
+
+    cache.set(key, results, GEOCODE_CACHE_TTL)
     return results

@@ -16,15 +16,22 @@ slices the client-facing 49 h departure-relative window itself. Null entries
 are kept as None (model gaps).
 """
 
+import hashlib
+import json
 import logging
+import time
 
 import requests
+from django.core.cache import cache
 
 logger = logging.getLogger("routing")
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT_S = 10
 BATCH_SIZE = 100  # coordinate pairs per request
+TRANSIENT_STATUS = (500, 502, 503, 504)
+RETRY_BACKOFF_S = 1
+WEATHER_CACHE_TTL = 15 * 60
 
 
 class UpstreamError(Exception):
@@ -55,11 +62,21 @@ def _normalize_series(entry: dict) -> dict:
 
 
 def _fetch_chunk(latitudes, longitudes) -> list:
-    try:
-        response = requests.get(FORECAST_URL, params=_build_params(latitudes, longitudes), timeout=TIMEOUT_S)
-    except requests.RequestException as exc:
-        logger.warning("Open-Meteo request failed: %s", exc)
-        raise UpstreamError("Weather service is unreachable.") from exc
+    """One batched request, with one retry on transient failures."""
+    for attempt in (0, 1):
+        try:
+            response = requests.get(FORECAST_URL, params=_build_params(latitudes, longitudes), timeout=TIMEOUT_S)
+        except requests.RequestException as exc:
+            if attempt == 0:
+                time.sleep(RETRY_BACKOFF_S)
+                continue
+            logger.warning("Open-Meteo request failed: %s", exc)
+            raise UpstreamError("Weather service is unreachable.") from exc
+
+        if response.status_code in TRANSIENT_STATUS and attempt == 0:
+            time.sleep(RETRY_BACKOFF_S)
+            continue
+        break
 
     if response.status_code >= 400:
         logger.warning("Open-Meteo HTTP %s: %s", response.status_code, response.text[:300])
@@ -75,17 +92,29 @@ def _fetch_chunk(latitudes, longitudes) -> list:
     return [_normalize_series(entry) for entry in entries]
 
 
+def _cache_key(points: list) -> str:
+    digest = hashlib.sha1(json.dumps(points).encode()).hexdigest()
+    return f"weather:{digest}"
+
+
 def get_hourly_forecasts(points: list) -> list:
-    """Hourly series per point, in input order.
+    """Hourly series per point, in input order (cached 15 min per point set).
 
     points: [(lat, lng), ...] — returns the same number of entries, each
-    {hours, wind_mph, rain_in_hr, snow_in_hr} truncated to HOURS_NEEDED.
+    {hours, wind_mph, rain_in_hr, snow_in_hr} covering the ~72 h grid.
     """
     if not points:
         return []
+
+    key = _cache_key(points)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
 
     results = []
     for start in range(0, len(points), BATCH_SIZE):
         chunk = points[start : start + BATCH_SIZE]
         results.extend(_fetch_chunk([p[0] for p in chunk], [p[1] for p in chunk]))
+
+    cache.set(key, results, WEATHER_CACHE_TTL)
     return results
