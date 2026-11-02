@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from routing.serializers import PlanRequestSerializer
+from routing.services import geocoding
 from routing.services.ors import UpstreamError
 
 
@@ -62,10 +63,9 @@ def test_serializer_rejects_bad_coordinates():
 @pytest.mark.django_db
 def test_geocode_returns_results(client, monkeypatch):
     from routing.views import geocode as geocode_view  # noqa: F401  (URL wiring smoke)
-    from routing.services import ors
 
     monkeypatch.setattr(
-        ors, "geocode",
+        geocoding, "geocode",
         lambda text, size=5: [{"name": "Dallas, TX", "lng": -96.797, "lat": 32.7767}],
     )
 
@@ -85,12 +85,10 @@ def test_geocode_short_text_returns_empty(client):
 
 @pytest.mark.django_db
 def test_geocode_upstream_failure_maps_to_502(client, monkeypatch):
-    from routing.services import ors
-
     def boom(text, size=5):
         raise UpstreamError("Geocoding service is unreachable.")
 
-    monkeypatch.setattr(ors, "geocode", boom)
+    monkeypatch.setattr(geocoding, "geocode", boom)
 
     response = client.get(reverse("geocode"), {"text": "dal"})
 

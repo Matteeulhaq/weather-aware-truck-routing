@@ -18,7 +18,7 @@ Response contract highlights (consumed by the React client):
 import logging
 from datetime import datetime, timezone as dt_timezone
 
-from . import open_meteo, ors
+from . import geocoding, open_meteo, ors
 from .checkpoints import build_checkpoints
 from ..risk.aggregate import CheckpointAssessment, recommend, route_stats
 from ..risk.classify import checkpoint_risk
@@ -66,7 +66,7 @@ def _resolve_place(place: dict) -> dict:
     """Coordinates for a free-text place (first geocode hit); passes through resolved ones."""
     if place["lat"] is not None:
         return place
-    results = ors.geocode(place["name"], size=1)
+    results = geocoding.geocode(place["name"], size=1)
     if not results:
         raise LookupError(f"Could not find '{place['name']}'.")
     return results[0]

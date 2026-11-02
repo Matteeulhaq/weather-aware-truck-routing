@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .serializers import PlanRequestSerializer
-from .services import ors
+from .services import geocoding
 from .services.ors import RateLimitError, UpstreamError
 from .services.planner import plan_trip
 
@@ -32,7 +32,7 @@ def geocode(request):
         return Response({"results": []})
 
     try:
-        results = ors.geocode(text)
+        results = geocoding.geocode(text)
     except UpstreamError as exc:
         return upstream_response(exc)
     return Response({"results": results})

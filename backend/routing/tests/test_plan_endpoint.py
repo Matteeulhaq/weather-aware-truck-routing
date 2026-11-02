@@ -6,7 +6,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from routing.services import open_meteo, ors
+from routing.services import geocoding, open_meteo, ors
 
 METERS_PER_MILE = 1609.344
 
@@ -48,7 +48,7 @@ def patch_upstream(monkeypatch):
     """
 
     def install(wind_mph=15.0):
-        monkeypatch.setattr(ors, "geocode", lambda text, size=5: [
+        monkeypatch.setattr(geocoding, "geocode", lambda text, size=5: [
             {"name": "Dallas, TX", "lng": -96.8, "lat": 32.77}
         ])
         monkeypatch.setattr(ors, "get_directions", lambda *a, **k: [
@@ -208,7 +208,7 @@ def test_plan_handles_horizon_gracefully(client, patch_upstream, monkeypatch):
 
 @pytest.mark.django_db
 def test_plan_geocode_miss_maps_to_400(client, monkeypatch):
-    monkeypatch.setattr(ors, "geocode", lambda text, size=1: [])
+    monkeypatch.setattr(geocoding, "geocode", lambda text, size=1: [])
 
     response = client.post(reverse("plan"), _payload(), content_type="application/json")
 

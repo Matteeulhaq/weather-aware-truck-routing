@@ -10,7 +10,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework import serializers
 
-from .services import ors
+from .services import geocoding
 
 MAX_LOAD_LBS = 80_000
 # Small tolerance so a client clock a few minutes behind doesn't get rejected.
@@ -61,7 +61,7 @@ def resolve_place(place: dict) -> dict:
     """Fill in coordinates for a free-text place via geocoding (first hit)."""
     if place["lat"] is not None:
         return place
-    results = ors.geocode(place["name"], size=1)
+    results = geocoding.geocode(place["name"], size=1)
     if not results:
         raise LookupError(f"Could not find '{place['name']}'.")
     return results[0]
