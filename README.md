@@ -72,6 +72,7 @@ The Vite dev server proxies `/api` to `localhost:8000`. Production parity check:
 | `SECRET_KEY` | `backend/.env` / Render | Django secret (auto-generated on Render) |
 | `DEBUG` | both | `True` locally, `False` in production |
 | `ORS_API_KEY` | both | OpenRouteService key — server-side only, never in the client bundle |
+| `VITE_CARTO_API_KEY` | `client/.env.local` / Render | [CARTO basemaps](https://carto.com/basemaps) key for the dark map tiles (free account). Inlined into the client bundle at build time; without it the map falls back to keyless OpenStreetMap tiles |
 | `ALLOWED_HOSTS` | Render | Comma-separated hosts (`.onrender.com`) |
 
 ## API

@@ -19,6 +19,9 @@ services:
         value: 3.12.10
       - key: ORS_API_KEY
         sync: false
+      # Build-time input for Vite — inlined into the client bundle by the build.
+      - key: VITE_CARTO_API_KEY
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG

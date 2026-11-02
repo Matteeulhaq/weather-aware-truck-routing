@@ -74,10 +74,22 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
 
     const map = L.map(containerRef.current, { preferCanvas: true, zoomControl: false })
     L.control.zoom({ position: 'bottomright' }).addTo(map)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      maxZoom: 19,
-    }).addTo(map)
+    // CARTO dark basemap — requires an API key (VITE_CARTO_API_KEY, free at
+    // carto.com/basemaps). Without one, fall back to keyless OSM raster tiles
+    // so a fresh clone still renders a map (light-themed).
+    const cartoKey = import.meta.env.VITE_CARTO_API_KEY
+    const basemap = cartoKey
+      ? {
+          url: `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?api_key=${cartoKey}`,
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        }
+      : {
+          url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }
+    L.tileLayer(basemap.url, { attribution: basemap.attribution, maxZoom: 19 }).addTo(map)
     map.setView([39.5, -98.35], 4)
 
     mapRef.current = map
