@@ -40,9 +40,17 @@ def _forecast(wind_mph):
 
 @pytest.fixture
 def patch_upstream(monkeypatch):
-    """Two routes: same geometry, second one twice as slow; calm weather."""
+    """Two routes: same geometry, second one twice as slow; calm weather.
+
+    Patches every upstream call the planner makes — geocode included — so
+    the endpoint tests stay hermetic (CI has no ORS_API_KEY and must not
+    need one).
+    """
 
     def install(wind_mph=15.0):
+        monkeypatch.setattr(ors, "geocode", lambda text, size=5: [
+            {"name": "Dallas, TX", "lng": -96.8, "lat": 32.77}
+        ])
         monkeypatch.setattr(ors, "get_directions", lambda *a, **k: [
             _feature(400_000, 14_400),  # ~249 mi, 4 h
             _feature(410_000, 28_800),  # ~255 mi, 8 h

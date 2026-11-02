@@ -37,7 +37,8 @@ class FakeResponse:
         return self._payload
 
 
-def test_get_directions_parses_features_and_sends_alternatives(monkeypatch):
+def test_get_directions_parses_features_and_sends_alternatives(monkeypatch, settings):
+    settings.ORS_API_KEY = "test-key"  # assert the key is sent, not that CI has a real one
     captured = {}
 
     def fake_post(url, json=None, headers=None, timeout=None):
