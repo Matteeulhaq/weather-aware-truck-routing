@@ -47,6 +47,8 @@ export default function App() {
           selectedRouteId={selectedRouteId}
           onSelectRoute={setSelectedRouteId}
           focusTarget={focusTarget}
+          sliderHour={0}
+          timelineMode={false}
         />
         <Legend />
         {/* HeatTimeline (T4.2) floats bottom-center. */}

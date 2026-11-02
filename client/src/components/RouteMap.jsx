@@ -1,8 +1,21 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
+import 'leaflet.heat'
 import { toLeafletLatLngs } from '../lib/geo'
-import { riskColor, NO_DATA_COLOR } from '../lib/riskColors'
+import { riskColor, NO_DATA_COLOR, RISK_COLORS } from '../lib/riskColors'
 import { formatDateTime } from '../lib/format'
+import { buildCorridor, heatPoints } from '../lib/corridor'
+
+const HEAT_GRADIENT = {
+  0.0: RISK_COLORS.Low,
+  0.25: RISK_COLORS.Moderate,
+  0.5: RISK_COLORS.High,
+  0.75: RISK_COLORS.Severe,
+  1.0: RISK_COLORS['No Travel'],
+}
+const HEAT_MAX = 4 // risk score scale
+const HEAT_RADIUS = 18
+const HEAT_BLUR = 12
 
 const RECOMMENDED_STYLE = { color: '#38bdf8', weight: 6, opacity: 0.95 }
 const SELECTED_STYLE = { color: '#7dd3fc', weight: 6, opacity: 0.95 }
@@ -42,13 +55,17 @@ function popupHtml(checkpoint) {
   )
 }
 
-export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTarget }) {
+export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTarget, sliderHour, timelineMode }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const routesGroupRef = useRef(null)
   const checkpointsGroupRef = useRef(null)
   const polylineRefs = useRef(new Map())
   const markerRefs = useRef(new Map())
+  const heatLayerRef = useRef(null)
+  const corridorRef = useRef(null)
+  const checkpointsRef = useRef(null)
+  const heatFrameRef = useRef(null)
 
   // Map lifecycle — once. The remove() cleanup keeps StrictMode's
   // double-mount from hitting "Map container is already initialized".
@@ -120,7 +137,31 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
         markerRefs.current.set(`${route.route_id}:${checkpoint.seq}`, marker)
       }
     }
-  }, [plan, onSelectRoute])
+
+    // Corridor for the selected route + persistent heat layer (band).
+    const selected =
+      plan.routes.find((r) => r.route_id === selectedRouteId) ??
+      plan.routes.find((r) => r.route_id === plan.recommended_route_id) ??
+      plan.routes[0]
+    corridorRef.current = buildCorridor(selected)
+    checkpointsRef.current = selected.checkpoints
+
+    if (heatLayerRef.current) {
+      heatLayerRef.current.remove()
+      heatLayerRef.current = null
+    }
+    if (corridorRef.current.length > 0) {
+      heatLayerRef.current = L
+        .heatLayer(heatPoints(corridorRef.current, selected.checkpoints, null), {
+          max: HEAT_MAX,
+          radius: HEAT_RADIUS,
+          blur: HEAT_BLUR,
+          gradient: HEAT_GRADIENT,
+          minOpacity: 0.25,
+        })
+        .addTo(map)
+    }
+  }, [plan, onSelectRoute, selectedRouteId])
 
   // Selection styling — pure imperative restyle, no layer rebuild.
   useEffect(() => {
@@ -153,9 +194,35 @@ export default function RouteMap({ plan, selectedRouteId, onSelectRoute, focusTa
     marker.openPopup()
   }, [focusTarget])
 
-  return (
-    <>
-      <div ref={containerRef} className="h-full w-full" aria-label="Route map" />
-    </>
-  )
+  // Slider updates: imperative setLatLngs on the persistent heat layer,
+  // rAF-throttled so drags never queue more than one repaint per frame.
+  useEffect(() => {
+    const hour = timelineMode ? (sliderHour ?? 0) : null
+    const corridor = corridorRef.current
+    const checkpoints = checkpointsRef.current
+    const heatLayer = heatLayerRef.current
+    if (!corridor || !checkpoints || !heatLayer) return
+
+    if (heatFrameRef.current !== null) cancelAnimationFrame(heatFrameRef.current)
+    heatFrameRef.current = requestAnimationFrame(() => {
+      heatFrameRef.current = null
+      heatLayer.setLatLngs(heatPoints(corridor, checkpoints, hour))
+    })
+
+    // Timeline mode hands the visual lead to the band; markers recede.
+    const opacity = timelineMode ? 0.35 : 0.95
+    for (const [key, marker] of markerRefs.current) {
+      const routeId = key.split(':')[0]
+      const dimmed = opacity === 0.35 || (Boolean(selectedRouteId) && routeId !== selectedRouteId)
+      marker.setStyle({ fillOpacity: dimmed ? 0.35 : opacity })
+    }
+    return () => {
+      if (heatFrameRef.current !== null) {
+        cancelAnimationFrame(heatFrameRef.current)
+        heatFrameRef.current = null
+      }
+    }
+  }, [sliderHour, timelineMode, selectedRouteId])
+
+  return <div ref={containerRef} className="h-full w-full" aria-label="Route map" />
 }
